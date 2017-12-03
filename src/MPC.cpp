@@ -21,6 +21,24 @@ double dt = 0.05;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
+// NOTE: feel free to play around with this
+// or do something completely different
+double ref_v = 10;
+
+
+
+// The solver takes all the state variables and actuator
+// variables in a singular vector. Thus, we should to establish
+// when one variable starts and another ends to make our lifes easier.
+size_t x_start = 0;
+size_t y_start = x_start + N;
+size_t psi_start = y_start + N;
+size_t v_start = psi_start + N;
+size_t cte_start = v_start + N;
+size_t epsi_start = cte_start + N;
+size_t delta_start = epsi_start + N;
+size_t a_start = delta_start + N - 1;
+
 class FG_eval {
  public:
   // Fitted polynomial coefficients
@@ -34,9 +52,6 @@ class FG_eval {
     // NOTE: You'll probably go back and forth between this function and
     // the Solver function below.
 
-    Eigen::VectorXd coeffs_d = Eigen::VectorXd(3);
-    coeffs_d << coeffs[1], 2 * coeffs[2], 3 * coeffs[3];
-
     // The cost is stored is the first element of `fg`.
     // Any additions to the cost should be added to `fg[0]`.
     fg[0] = 0;
@@ -45,9 +60,21 @@ class FG_eval {
     // TODO: Define the cost related the reference state and
     // any anything you think may be beneficial.
     for(int t=0; t<N; t++){
-      fg[0] += CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 1 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[v_start + t] - ref_v, 2);
+    }
+
+    // Minimize the use of actuators.
+    for (int t = 0; t < N - 1; t++) {
+      fg[0] += 1 * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + t], 2);
+    }
+
+    // Minimize the value gap between sequential actuations.
+    for (int t = 0; t < N - 2; t++) {
+      fg[0] += 1 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     //
@@ -94,11 +121,18 @@ class FG_eval {
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
 
       // using a order 1 polynomial
-      AD<double> calc_cte0 = polyeval(coeffs, x0) - y0;
-      fg[1 + cte_start + t] = cte1 - (v0 * CppAD::sin(epsi0) * dt);
+      AD<double> aux = coeffs[0] +
+                       coeffs[1] * x0 +
+                       coeffs[2] * x0 * x0 +
+                       coeffs[3] * x0 * x0 * x0;
+      AD<double> calc_cte0 = aux - y0;
+      fg[1 + cte_start + t] = cte1 - (calc_cte0 + v0 * CppAD::sin(epsi0) * dt);
 
       // using order 1 polynomial so derivative is just higher coeff
-      AD<double> calc_epsi0 = psi0 - CppAD::atan(polyeval(coeffs_d, x0));
+      AD<double> aux2 = coeffs[1] +
+                        2 * coeffs[2] * x0 +
+                        3 * coeffs[2] * x0 * x0;
+      AD<double> calc_epsi0 = psi0 - CppAD::atan(aux2);
       fg[1 + epsi_start + t] = epsi1 - ( calc_epsi0 + (v0 / Lf_) * delta0 * dt);
     }
 
@@ -115,6 +149,13 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
   size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
+
+  double x = state[0];
+  double y = state[1];
+  double psi = state[2];
+  double v = state[3];
+  double cte = state[4];
+  double epsi = state[5];
 
   // TODO: Set the number of model variables (includes both states and inputs).
   // For example: If the state is a 4 element vector, the actuators is a 2
@@ -181,6 +222,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   constraints_upperbound[cte_start] = cte;
   constraints_upperbound[epsi_start] = epsi;
 
+  cout << "before fg_eval" << endl;
+
   // object that computes objective and constraints
   FG_eval fg_eval(coeffs);
 
@@ -222,5 +265,15 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   //
   // {...} is shorthand for creating a vector, so auto x1 = {1.0,2.0}
   // creates a 2 element double vector.
-  return {};
+  vector<double> ret_vec;
+  ret_vec.push_back(solution.x[delta_start]);
+  ret_vec.push_back(solution.x[a_start]);
+
+  ret_vec.push_back(N);
+  for(int i=0; i<N; i++){
+    ret_vec.push_back(solution.x[x_start+i]);
+    ret_vec.push_back(solution.x[y_start+i]);
+  }
+
+  return ret_vec;
 }

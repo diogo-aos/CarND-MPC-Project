@@ -6,4 +6,4 @@
 
 # Run particle filter
 cd ./build
-./particle_filter
+./mpc
