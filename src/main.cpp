@@ -9,6 +9,7 @@
 #include "MPC.h"
 #include "json.hpp"
 
+
 // for convenience
 using json = nlohmann::json;
 
@@ -65,11 +66,25 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
-int main() {
+// double v_ref = 40;
+// double K_cte = 1.0;
+// double K_epsi = 1.0;
+// double K_v = 1.0;
+// double K_actuator_delta = 1.0;
+// double K_actuator_a = 1.0;
+// double K_like_before_delta = 6000;
+// double K_like_before_a = 1.0;
+// int N = 25;
+// double dt = 0.05;
+
+int main(int argc, char *argv[]) {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
+  if (argc == 2){
+    mpc.init(argv[1]);
+  }
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -103,7 +118,7 @@ int main() {
           Eigen::VectorXd wp_x = Eigen::VectorXd(ptsx.size());
           Eigen::VectorXd wp_y = Eigen::VectorXd(ptsy.size());
           double rot_teta = -psi;
-          for(int i; i < ptsx.size(); i++){
+          for(int i=0; i < ptsx.size(); i++){
             // wp_x[i] = ptsx[i];
             // wp_y[i] = ptsy[i];
             double x_t = ptsx[i] - px,  // x, y translated
@@ -156,15 +171,12 @@ int main() {
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
-          double N = solution[2];
-          int i, pos_start=3;
+          int i, pos_start=2;
           for (i=pos_start; i<solution.size(); i+=2){
             mpc_x_vals.push_back(solution[i]);
             mpc_y_vals.push_back(solution[i+1]);
 
           }
-          y_start = i;
-          for (; i<y_start+N-1; i++)
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
 

@@ -1,13 +1,29 @@
 #include "MPC.h"
+#include <stdio.h>
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
 #include "Eigen-3.3/Eigen/Core"
 
+#include <fstream>
+#include <sstream>
+#include <string>
+
+double v_ref = 40;
+
+double K_cte = 1.0;
+double K_epsi = 1.0;
+double K_v = 1.0;
+double K_actuator_delta = 1.0;
+double K_actuator_a = 1.0;
+double K_like_before_delta = 6000;
+double K_like_before_a = 1.0;
+
+int N = 25;
+double dt = 0.05;
+
 using CppAD::AD;
 
-// TODO: Set the timestep length and duration
-size_t N = 25;
-double dt = 0.05;
+
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -20,11 +36,6 @@ double dt = 0.05;
 //
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
-
-// NOTE: feel free to play around with this
-// or do something completely different
-double ref_v = 10;
-
 
 
 // The solver takes all the state variables and actuator
@@ -60,21 +71,21 @@ class FG_eval {
     // TODO: Define the cost related the reference state and
     // any anything you think may be beneficial.
     for(int t=0; t<N; t++){
-      fg[0] += 1 * CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 1 * CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += 1 * CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += K_cte * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += K_epsi * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += K_v * CppAD::pow(vars[v_start + t] - v_ref, 2);
     }
 
     // Minimize the use of actuators.
     for (int t = 0; t < N - 1; t++) {
-      fg[0] += 1 * CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += 1 * CppAD::pow(vars[a_start + t], 2);
+      fg[0] += K_actuator_delta * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += K_actuator_a * CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
-      fg[0] += 1 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += K_like_before_delta * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += K_like_before_a * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     //
@@ -120,19 +131,26 @@ class FG_eval {
       fg[1 + psi_start + t] = psi1 - ( psi0 + (v0 / Lf_) * delta0 * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
 
-      // using a order 1 polynomial
-      AD<double> aux = coeffs[0] +
-                       coeffs[1] * x0 +
-                       coeffs[2] * x0 * x0 +
-                       coeffs[3] * x0 * x0 * x0;
-      AD<double> calc_cte0 = aux - y0;
+      // AD<double> f0 = coeffs[0] +
+      //                  coeffs[1] * x0 +
+      //                  coeffs[2] * x0 * x0 +
+      //                  coeffs[3] * x0 * x0 * x0;
+      AD<double> f0 = 0.0;
+      for (int i = 0; i < coeffs.size(); i++) {
+        f0 += coeffs[i] * CppAD::pow(x0, i);
+      }
+      AD<double> calc_cte0 = f0 - y0;
       fg[1 + cte_start + t] = cte1 - (calc_cte0 + v0 * CppAD::sin(epsi0) * dt);
 
-      // using order 1 polynomial so derivative is just higher coeff
-      AD<double> aux2 = coeffs[1] +
-                        2 * coeffs[2] * x0 +
-                        3 * coeffs[2] * x0 * x0;
-      AD<double> calc_epsi0 = psi0 - CppAD::atan(aux2);
+      //   f'(x0)
+      // AD<double> df0 = coeffs[1] +
+      //                   2 * coeffs[2] * x0 +
+      //                   3 * coeffs[2] * x0 * x0;
+      AD<double> df0 = 0.0;
+      for (int i = 1; i < coeffs.size(); i++) {
+        f0 += i * coeffs[i] * CppAD::pow(x0, i-1);
+      }
+      AD<double> calc_epsi0 = psi0 - CppAD::atan(df0);
       fg[1 + epsi_start + t] = epsi1 - ( calc_epsi0 + (v0 / Lf_) * delta0 * dt);
     }
 
@@ -145,9 +163,58 @@ class FG_eval {
 MPC::MPC() {}
 MPC::~MPC() {}
 
+void MPC::init(char filename[]) {
+  char line[1000];
+  FILE * fp;
+
+  std::cout << "opening file..." << std::endl;
+  fp = fopen(filename, "r");
+  if (fp == NULL){
+    fprintf(stderr, "file pointer is null");
+    fclose(fp);
+  }
+
+  std::cout << "reading file..." << std::endl;
+  while(fgets(line, sizeof(line), fp)){
+    std::cout << "read config line: " << line;
+    switch(line[0]){
+      case 'a':
+        sscanf(line, "%c %d", &line[0], &N); break;
+      case 'b':
+        sscanf(line, "%c %lf", &line[0], &dt); break;
+      case 'c':
+        sscanf(line, "%c %lf", &line[0], &v_ref); break;
+      case 'd':
+        sscanf(line, "%c %lf", &line[0], &K_cte); break;
+      case 'e':
+        sscanf(line, "%c %lf", &line[0], &K_epsi); break;
+      case 'f':
+        sscanf(line, "%c %lf", &line[0], &K_v); break;
+      case 'g':
+        sscanf(line, "%c %lf", &line[0], &K_actuator_delta); break;
+      case 'h':
+        sscanf(line, "%c %lf", &line[0], &K_actuator_a); break;
+      case 'i':
+        sscanf(line, "%c %lf", &line[0], &K_like_before_delta); break;
+      case 'j':
+        sscanf(line, "%c %lf", &line[0], &K_like_before_a); break;
+    }
+  }
+  std::cout << "Number of steps: " << N << std::endl;
+  std::cout << "dt: " << dt << std::endl;
+  std::cout << "reference velocity: " << v_ref << std::endl;
+  std::cout << "weight cte: " << K_cte << std::endl;
+  std::cout << "weight epsi: " << K_epsi << std::endl;
+  std::cout << "weight ref vel: " << K_v << std::endl;
+  std::cout << "weight actuator delta: " << K_actuator_delta << std::endl;
+  std::cout << "weight actuator acc: " << K_actuator_a << std::endl;
+  std::cout << "weight dif delta: " << K_like_before_delta << std::endl;
+  std::cout << "weight dif acc: " << K_like_before_a << std::endl;
+  fclose(fp);
+}
+
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
-  size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
 
   double x = state[0];
@@ -269,7 +336,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   ret_vec.push_back(solution.x[delta_start]);
   ret_vec.push_back(solution.x[a_start]);
 
-  ret_vec.push_back(N);
   for(int i=0; i<N; i++){
     ret_vec.push_back(solution.x[x_start+i]);
     ret_vec.push_back(solution.x[y_start+i]);

@@ -11,6 +11,8 @@ class MPC {
   MPC();
 
   virtual ~MPC();
+  void init(char filename[]);
+
 
   // Solve the model given an initial state and polynomial coefficients.
   // Return the first actuatotions.

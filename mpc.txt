@@ -1,0 +1,20 @@
+# N
+a 25
+# dt
+b 0.05
+# reference velocity
+c 60
+# K cte
+d 1
+# K epsi
+e 1
+# K v
+f 1.0
+# K actuator delta
+g 6000
+# K actuator Acceleration
+h 10
+# K like before delta
+i 1.0
+# K like before Acceleration
+j 1.0

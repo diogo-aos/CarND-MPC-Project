@@ -5,5 +5,4 @@
 #
 
 # Run particle filter
-cd ./build
-./mpc
+./build/mpc mpc.txt
