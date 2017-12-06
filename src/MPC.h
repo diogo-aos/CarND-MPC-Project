@@ -11,7 +11,17 @@ class MPC {
   MPC();
 
   virtual ~MPC();
+
+  int sys_latency;
+  int model_latency;
+  double prev_delta;
+  double prev_a;
+  int print_in;
+  int print_out;
+  int print_errors;
+
   void init(char filename[]);
+  vector<double> project(vector<double> state, vector<double> actuators, double dt);
 
 
   // Solve the model given an initial state and polynomial coefficients.

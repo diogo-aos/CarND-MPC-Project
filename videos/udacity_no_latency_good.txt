@@ -5,9 +5,9 @@ a 8
 # dt
 b 0.1
 # reference velocity
-c 90
+c 120
 # K cte
-d 50
+d 500
 # K epsi
 e 10
 # K v
@@ -19,12 +19,12 @@ h 1
 # K like before delta
 i 1
 # K like before Acceleration
-j 10
+j 1
 # fast turn
 k 10
 # fast away
 l 0
 # model latency (ms)
-m 150
+m 0
 # sys latency (ms)
-n 100
+n 0

@@ -17,9 +17,11 @@ double K_actuator_delta = 1.0;
 double K_actuator_a = 1.0;
 double K_like_before_delta = 6000;
 double K_like_before_a = 1.0;
+double K_fast_turn = 1.0;
+double K_fast_away = 1.0;
 
 int N = 25;
-double dt = 0.05;
+double dt = 0.01;
 
 using CppAD::AD;
 
@@ -74,6 +76,10 @@ class FG_eval {
       fg[0] += K_cte * CppAD::pow(vars[cte_start + t], 2);
       fg[0] += K_epsi * CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += K_v * CppAD::pow(vars[v_start + t] - v_ref, 2);
+
+      fg[0] += K_fast_turn * CppAD::pow(vars[v_start + t] * vars[epsi_start + t], 2);
+      fg[0] += K_fast_away * CppAD::pow(vars[v_start + t] * vars[cte_start + t], 2);
+
     }
 
     // Minimize the use of actuators.
@@ -87,6 +93,7 @@ class FG_eval {
       fg[0] += K_like_before_delta * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += K_like_before_a * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
+
 
     //
     // Setup Constraints
@@ -163,9 +170,30 @@ class FG_eval {
 MPC::MPC() {}
 MPC::~MPC() {}
 
+vector<double> MPC::project(vector<double> state, vector<double> actuators, double dt){
+  double x = state[0],
+         y = state[1],
+         psi = state[2],
+         v = state[3],
+         cte = state[4],
+         epsi = state[5];
+  double delta = actuators[0],
+         a = actuators[1];
+
+  x = x + v * cos(psi) * dt;
+  y = y + v * sin(psi) * dt;
+  psi = psi + (v / Lf) * prev_delta * dt;
+  cte = cte + v * sin(epsi) * dt;
+  epsi = epsi + (v / Lf) * delta * dt;
+  v = v + a * dt;
+
+  return {x, y, psi, v, cte, epsi};
+}
+
 void MPC::init(char filename[]) {
   char line[1000];
   FILE * fp;
+  int print_flags = 0;
 
   std::cout << "opening file..." << std::endl;
   fp = fopen(filename, "r");
@@ -198,10 +226,22 @@ void MPC::init(char filename[]) {
         sscanf(line, "%c %lf", &line[0], &K_like_before_delta); break;
       case 'j':
         sscanf(line, "%c %lf", &line[0], &K_like_before_a); break;
+      case 'k':
+        sscanf(line, "%c %lf", &line[0], &K_fast_turn); break;
+      case 'l':
+        sscanf(line, "%c %lf", &line[0], &K_fast_away); break;
+      case 'm':
+        sscanf(line, "%c %d", &line[0], &model_latency); break;
+      case 'n':
+        sscanf(line, "%c %d", &line[0], &sys_latency); break;
+      case 'z':
+        sscanf(line, "%c %d", &line[0], &print_flags); break;
     }
   }
+  fclose(fp);
   std::cout << "Number of steps: " << N << std::endl;
   std::cout << "dt: " << dt << std::endl;
+  std::cout << "time horizon: " << dt * N << std::endl;
   std::cout << "reference velocity: " << v_ref << std::endl;
   std::cout << "weight cte: " << K_cte << std::endl;
   std::cout << "weight epsi: " << K_epsi << std::endl;
@@ -210,7 +250,29 @@ void MPC::init(char filename[]) {
   std::cout << "weight actuator acc: " << K_actuator_a << std::endl;
   std::cout << "weight dif delta: " << K_like_before_delta << std::endl;
   std::cout << "weight dif acc: " << K_like_before_a << std::endl;
-  fclose(fp);
+  std::cout << "weight fast turn: " << K_fast_turn << std::endl;
+  std::cout << "weight fast away: " << K_fast_away << std::endl;
+  std::cout << "model latency [ms]: " << model_latency << std::endl;
+  std::cout << "sys latency [ms]: " << sys_latency << std::endl;
+  std::cout << "print flags: " << print_flags << std::endl;
+
+
+  print_in = print_flags % 10; print_flags /= 10;
+  print_out = print_flags % 10; print_flags /= 10;
+  print_errors = print_flags % 10; print_flags /= 10;
+
+  std::cout << "  print telemetry: " << print_in << std::endl;
+  std::cout << "  print output: " << print_out << std::endl;
+  std::cout << "  print errors: " << print_errors << std::endl;
+  // compute indexes for new N
+  x_start = 0;
+  y_start = x_start + N;
+  psi_start = y_start + N;
+  v_start = psi_start + N;
+  cte_start = v_start + N;
+  epsi_start = cte_start + N;
+  delta_start = epsi_start + N;
+  a_start = delta_start + N - 1;
 }
 
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
