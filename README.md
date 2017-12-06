@@ -129,5 +129,59 @@ fg[0] += K_fast_turn * CppAD::pow(vars[v_start + t] * vars[epsi_start + t], 2);
 fg[0] += K_fast_away * CppAD::pow(vars[v_start + t] * vars[cte_start + t], 2);
 ```
 
+These two components will be referenced as _fast away_ and _fast turn_, respectevely, for the rest of this document.
+
 ## 2.3. Horizon parameters
 The final piece for the controller is to choose a good number of time steps _N_ and time interval _dt_ for the desired horizon length _T_. There is a tradeoff to be considered here. Having a high number of steps means the controller will be slow and will add latency to the system - which is harmful for the performance. Having a small _T_ means that the controller will not optimize the immediate control inputs to future situations - we could imagine this being bad on tight curves since the controller would not adjust the inputs with them in the horizon.
+
+# 3. Implementation
+To reduce the number of compilations necessary to test hypothesis and setups, all the controller parameters (cost function weights, reference velocity, _N_, _dt_, system latency, model latency) are read from a text file `mpc.txt`. This code was added to a new method `MPC::init` of the `MPC` class.
+
+When the controller is initialized it prints the values of all the relevant parameters for the user to inspect. It should be noted that the system latency is not hardcoded to 100 ms anymore as it was before. This allowed for easier experimentation with the system and model latencies.
+
+Three scripts were added to the project to simplify the process of cleaning the workspace, compiling and running the controller: `clean.sh`, `build.sh` and `run.sh`. The `run.sh` script expects a `mpc.txt` file to exist in the project folder.
+
+# 4. Simulation
+
+## 4.1. No system latency
+
+The tuning of the controller started with a setup where no system latency (delay in the actuator inputs) was added. This eased the process of gaining intuition on the effect of each parameter. The result of this first experimentation can be seen on [this video](https://youtu.be/9bZ9r-qF7BM). The parameters used are on [this configuration file](video/udacity_no_latency_good.txt).
+
+The initial setup was such that all weights were set to 1, for the exception of the _fast turn_ and _fast away_ weights which were not used. The reference velocity was set to a low value and I used 25 time steps spaced by 50 ms. From these configuration, the car started to wobble wildly shortly after the simulation start, as the steering command values varied rapidly and steeply in a short time.
+
+This lead to an increase of several orders of magnitude of the steering command component weight. With such a configuration the car could complete a loop around the track, but it was slow. After increasing the reference speed, the car had problems recovering from tight curves, which meant the weight of the errors had to be adjusted. This helped and after the _fast turn_ component was added the driving became safer and closer to the lane center as the speed was decreased before and during turns. It was found that the number of time steps and interval between steps could be adjusted such that a _N=8_ and _dt=0.1_ performed well while also making the computation significantly faster. The final parameters can be consulted below.
+
+```
+# print received telemetry and outgoing
+z 100
+# N
+a 8
+# dt
+b 0.1
+# reference velocity
+c 120
+# K cte
+d 500
+# K epsi
+e 10
+# K v
+f 1
+# K actuator delta
+g 10000
+# K actuator Acceleration
+h 1
+# K like before delta
+i 1
+# K like before Acceleration
+j 1
+# fast turn
+k 10
+# fast away
+l 0
+# model latency (ms)
+m 0
+# sys latency (ms)
+n 0
+```
+
+## 4.2. 100ms system latency
