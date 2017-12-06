@@ -10,6 +10,7 @@ This repository contains the solution for the Model Predictive Control (MPC) Pro
 The implemented controller uses a simple kinematic model without the inclusion of dynamic forces. The vehicle state is given by 4 variables: x and y position, orientation ![](report/img/psi.svg) and velocity (as seen in the figure below).
 
 ![Vehicle state variables](report/img/vehicle_state_model.png)
+
 Vehicle state variables (adapted from lecture video).
 
 These variables are actuated upon by the control inputs, which in our model are the throttle _a_ and the steering ![](report/img/delta.svg).
@@ -134,6 +135,16 @@ These two components will be referenced as _fast away_ and _fast turn_, respecte
 ## 2.3. Horizon parameters
 The final piece for the controller is to choose a good number of time steps _N_ and time interval _dt_ for the desired horizon length _T_. There is a tradeoff to be considered here. Having a high number of steps means the controller will be slow and will add latency to the system - which is harmful for the performance. Having a small _T_ means that the controller will not optimize the immediate control inputs to future situations - we could imagine this being bad on tight curves since the controller would not adjust the inputs with them in the horizon.
 
+## 2.4. Dealing with system latency
+
+There are basically two ways to address the time it takes for the control inputs to be sent and executed by the actuators (system latency).
+
+ - knowing the system latency, the controller can start predicting the state variables into the future by an amount of time equal to the latency and use that prediction as the initial state fed to the optimizer;
+
+ - compute how many time steps _k_ the latency takes and for those first _k_ time steps the control input limits in the optimization are set to the received control values from the telemetry.
+
+Using the first approach allowed for a more fine tuned of the model latency. This is useful since the controller computations can also be characterized and included in the model along with the system latency.
+
 # 3. Implementation
 To reduce the number of compilations necessary to test hypothesis and setups, all the controller parameters (cost function weights, reference velocity, _N_, _dt_, system latency, model latency) are read from a text file `mpc.txt`. This code was added to a new method `MPC::init` of the `MPC` class.
 
@@ -184,4 +195,42 @@ m 0
 n 0
 ```
 
-## 4.2. 100ms system latency
+## 4.2. System latency of 100 ms
+
+Adding the system latency to the simulation made the controller obsolete to the new conditions. Right from the start, the car started wobbling around the lane center, until it went off-road. This meant that the tuning had to start from the beginning, but now a greater intuition on the effect of the different components informed the process.
+
+The rationale for the changed made was similar to that of the last section. The model latency started as the same as the system latency. However, the computation latency was characterized to vary around the 50 ms, so a final model latency of 150 ms was used. A video of the car driving around the track with the system latency on can be seen [here](https://youtu.be/jT4TBK5YpJ0). The final parameters can be seen below.
+
+
+```
+# print received telemetry and outgoing
+z 100
+# N
+a 8
+# dt
+b 0.1
+# reference velocity
+c 90
+# K cte
+d 50
+# K epsi
+e 10
+# K v
+f 1
+# K actuator delta
+g 10000
+# K actuator Acceleration
+h 1
+# K like before delta
+i 1
+# K like before Acceleration
+j 10
+# fast turn
+k 10
+# fast away
+l 0
+# model latency (ms)
+m 150
+# sys latency (ms)
+n 100
+```
