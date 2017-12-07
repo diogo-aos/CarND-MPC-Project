@@ -71,14 +71,12 @@ int main(int argc, char *argv[]) {
 
   // MPC is initialized here!
   MPC mpc;
-  mpc.model_latency = 0;
-  mpc.sys_latency = 100;
-  mpc.print_in = 1;
-  mpc.print_out = 1;
-  mpc.print_errors = 1;
+  mpc.fill_default();
   if (argc == 2){
     mpc.init(argv[1]);
   }
+
+  mpc.print_params();
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -106,8 +104,7 @@ int main(int argc, char *argv[]) {
           double delta = j[1]["steering_angle"];
           double a = j[1]["throttle"];
 
-          mpc.prev_delta = delta;
-          mpc.prev_a = a;
+          delta = -delta;
 
           // normalize psi
           // while (psi > M_PI)  psi -= 2.*M_PI;

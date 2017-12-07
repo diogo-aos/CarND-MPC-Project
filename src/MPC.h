@@ -20,7 +20,9 @@ class MPC {
   int print_out;
   int print_errors;
 
+  void fill_default(void);
   void init(char filename[]);
+  void print_params(void);
   vector<double> project(vector<double> state, vector<double> actuators, double dt);
 
 

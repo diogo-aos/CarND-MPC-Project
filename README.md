@@ -133,7 +133,16 @@ fg[0] += K_fast_away * CppAD::pow(vars[v_start + t] * vars[cte_start + t], 2);
 These two components will be referenced as _fast away_ and _fast turn_, respectevely, for the rest of this document.
 
 ## 2.3. Horizon parameters
-The final piece for the controller is to choose a good number of time steps _N_ and time interval _dt_ for the desired horizon length _T_. There is a tradeoff to be considered here. Having a high number of steps means the controller will be slow and will add latency to the system - which is harmful for the performance. Having a small _T_ means that the controller will not optimize the immediate control inputs to future situations - we could imagine this being bad on tight curves since the controller would not adjust the inputs with them in the horizon.
+The final piece for the controller is to choose a good number of time steps _N_ and time interval _dt_ for the desired horizon length _T_. There is a tradeoff to be considered here.
+
+ - Having a high _N_ means the controller will be slow and will add latency to the system - which is harmful for the performance. Having a small _N_ means not enough steps are considered in the optimization process.
+
+ - A big _dt_ will result in time steps that are too far apart, resulting in jumps on the vehicle prediction and control input values that will result in sudden and overacted driving - unsafe driving.
+
+ - Having a small _T_ means that the controller will not optimize the immediate control inputs to future situations - we could imagine this being bad on tight curves since the controller would not adjust the inputs with them in the horizon. Having too big a _T_ means the controller will be optimizing too far in the future. Worst case cenario, _T_ can far enough from the car that the fitted polynomial is no longer adequate and the controller will be optimizing control inputs for an incorrect trajectory.
+
+In this project, the final parameters used were 8 time steps (_N=8_) and a time interval between steps of 100 ms (_dt=0.1_).
+
 
 ## 2.4. Dealing with system latency
 
@@ -148,7 +157,9 @@ Using the first approach allowed for a more fine tuned of the model latency. Thi
 # 3. Implementation
 To reduce the number of compilations necessary to test hypothesis and setups, all the controller parameters (cost function weights, reference velocity, _N_, _dt_, system latency, model latency) are read from a text file `mpc.txt`. This code was added to a new method `MPC::init` of the `MPC` class.
 
-When the controller is initialized it prints the values of all the relevant parameters for the user to inspect. It should be noted that the system latency is not hardcoded to 100 ms anymore as it was before. This allowed for easier experimentation with the system and model latencies.
+The default parameters are hardcoded in the `MPC::fill_default` method. The default parameters are those shown in section 4.2.
+
+When the controller is initialized it prints the values of all the relevant parameters for the user to inspect. This allowed for easier experimentation with the system and model latencies.
 
 Three scripts were added to the project to simplify the process of cleaning the workspace, compiling and running the controller: `clean.sh`, `build.sh` and `run.sh`. The `run.sh` script expects a `mpc.txt` file to exist in the project folder.
 
@@ -199,7 +210,11 @@ n 0
 
 Adding the system latency to the simulation made the controller obsolete to the new conditions. Right from the start, the car started wobbling around the lane center, until it went off-road. This meant that the tuning had to start from the beginning, but now a greater intuition on the effect of the different components informed the process.
 
-The rationale for the changed made was similar to that of the last section. The model latency started as the same as the system latency. However, the computation latency was characterized to vary around the 50 ms, so a final model latency of 150 ms was used. A video of the car driving around the track with the system latency on can be seen [here](https://youtu.be/jT4TBK5YpJ0). The final parameters can be seen below.
+The rationale for the changed made was similar to that of the last section. The model latency started as the same as the system latency. However, the computation latency was characterized to vary around the 50 ms, so a final model latency of 150 ms was used. A video of the car driving around the track with the system latency on can be seen [here](https://youtu.be/jT4TBK5YpJ0).
+
+The reference speed was set to 90 mph. This speed is never attained, as the top speed is 87 mph on the portion of the track with very low curvature and as low as 40 mph on the curves.
+
+The final parameters can be seen below.
 
 
 ```

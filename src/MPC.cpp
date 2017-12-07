@@ -190,6 +190,63 @@ vector<double> MPC::project(vector<double> state, vector<double> actuators, doub
   return {x, y, psi, v, cte, epsi};
 }
 
+void MPC::fill_default(void){
+  // default values
+  N = 8;
+  dt = 0.1;
+  v_ref = 90;
+  K_cte = 50;
+  K_epsi = 10;
+  K_v = 1;
+  K_actuator_delta = 10000;
+  K_actuator_a = 1;
+  K_like_before_delta = 1;
+  K_like_before_a = 1;
+  K_fast_turn = 10;
+  K_fast_away = 0;
+  sys_latency = 100;
+  model_latency = 150;
+
+  print_in = 0;
+  print_out = 0;
+  print_errors = 1;
+
+
+  // compute indexes for new N
+  x_start = 0;
+  y_start = x_start + N;
+  psi_start = y_start + N;
+  v_start = psi_start + N;
+  cte_start = v_start + N;
+  epsi_start = cte_start + N;
+  delta_start = epsi_start + N;
+  a_start = delta_start + N - 1;
+}
+
+void MPC::print_params(void){
+  std::cout << "Number of steps: " << N << std::endl;
+  std::cout << "dt: " << dt << std::endl;
+  std::cout << "time horizon: " << dt * N << std::endl;
+  std::cout << "reference velocity: " << v_ref << std::endl;
+  std::cout << "weight cte: " << K_cte << std::endl;
+  std::cout << "weight epsi: " << K_epsi << std::endl;
+  std::cout << "weight ref vel: " << K_v << std::endl;
+  std::cout << "weight actuator delta: " << K_actuator_delta << std::endl;
+  std::cout << "weight actuator acc: " << K_actuator_a << std::endl;
+  std::cout << "weight dif delta: " << K_like_before_delta << std::endl;
+  std::cout << "weight dif acc: " << K_like_before_a << std::endl;
+  std::cout << "weight fast turn: " << K_fast_turn << std::endl;
+  std::cout << "weight fast away: " << K_fast_away << std::endl;
+  std::cout << "model latency [ms]: " << model_latency << std::endl;
+  std::cout << "sys latency [ms]: " << sys_latency << std::endl;
+
+
+  std::cout << "  print telemetry: " << print_in << std::endl;
+  std::cout << "  print output: " << print_out << std::endl;
+  std::cout << "  print errors: " << print_errors << std::endl;
+}
+
+
 void MPC::init(char filename[]) {
   char line[1000];
   FILE * fp;
@@ -239,31 +296,12 @@ void MPC::init(char filename[]) {
     }
   }
   fclose(fp);
-  std::cout << "Number of steps: " << N << std::endl;
-  std::cout << "dt: " << dt << std::endl;
-  std::cout << "time horizon: " << dt * N << std::endl;
-  std::cout << "reference velocity: " << v_ref << std::endl;
-  std::cout << "weight cte: " << K_cte << std::endl;
-  std::cout << "weight epsi: " << K_epsi << std::endl;
-  std::cout << "weight ref vel: " << K_v << std::endl;
-  std::cout << "weight actuator delta: " << K_actuator_delta << std::endl;
-  std::cout << "weight actuator acc: " << K_actuator_a << std::endl;
-  std::cout << "weight dif delta: " << K_like_before_delta << std::endl;
-  std::cout << "weight dif acc: " << K_like_before_a << std::endl;
-  std::cout << "weight fast turn: " << K_fast_turn << std::endl;
-  std::cout << "weight fast away: " << K_fast_away << std::endl;
-  std::cout << "model latency [ms]: " << model_latency << std::endl;
-  std::cout << "sys latency [ms]: " << sys_latency << std::endl;
-  std::cout << "print flags: " << print_flags << std::endl;
-
 
   print_in = print_flags % 10; print_flags /= 10;
   print_out = print_flags % 10; print_flags /= 10;
   print_errors = print_flags % 10; print_flags /= 10;
 
-  std::cout << "  print telemetry: " << print_in << std::endl;
-  std::cout << "  print output: " << print_out << std::endl;
-  std::cout << "  print errors: " << print_errors << std::endl;
+
   // compute indexes for new N
   x_start = 0;
   y_start = x_start + N;
